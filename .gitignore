@@ -1,0 +1,12 @@
+# Miscellaneous files
+misc/
+*.log
+*.tmp
+.env
+.env.local
+node_modules/
+dist/
+build/
+coverage/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,17 @@
+{
+  "extends": "./node_modules/assemblyscript/std/assembly.json",
+  "include": ["./assembly/**/*"],
+  "compilerOptions": {
+    "outDir": "./build",
+    "lib": ["es2020"],
+    "module": "es2020",
+    "target": "es2020",
+    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "typeRoots": [
+      "./node_modules/@types",
+      "./node_modules/assemblyscript/std/types",
+      "./node_modules/@massalabs"
+    ]
+  }
+}

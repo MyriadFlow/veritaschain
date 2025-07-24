@@ -1,0 +1,21 @@
+{
+  "name": "veritaschain-contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for VeritasChain decentralized journalism platform",
+  "type": "module",
+  "scripts": {
+    "asbuild:debug": "asc assembly/index.ts --target debug --outFile build/debug.wasm --textFile build/debug.wat --sourceMap --debug",
+    "asbuild:release": "asc assembly/index.ts --target release --outFile build/release.wasm --textFile build/release.wat --sourceMap --optimize",
+    "asbuild": "npm run asbuild:debug && npm run asbuild:release",
+    "build": "node build.js",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.27.37",
+    "@massalabs/as-transformer": "^0.4.0"
+  },
+  "dependencies": {
+    "@massalabs/massa-as-sdk": "^3.0.2",
+    "@massalabs/as-types": "^2.1.0"
+  }
+}

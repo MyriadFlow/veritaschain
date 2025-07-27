@@ -45,6 +45,28 @@ export class VeritasChainService {
     console.log("Wallet connected to VeritasChain service");
   }
 
+  async getWalletBalance(): Promise<string> {
+    if (!this.wallet) {
+      throw new Error("Wallet not connected");
+    }
+
+    try {
+      const accounts = await this.wallet.accounts();
+      if (!accounts.length) {
+        throw new Error("No accounts available");
+      }
+
+      const account = accounts[0];
+      const balance = await account.balance(true); // true for final balance
+      const balanceInMas = parseFloat(balance.toString()) / 1e9;
+      
+      return balanceInMas.toFixed(4);
+    } catch (error) {
+      console.error("Error getting wallet balance:", error);
+      throw new Error("Failed to get wallet balance");
+    }
+  }
+
   async testWalletConnection(): Promise<string> {
     if (!this.wallet) {
       throw new Error("Wallet not connected");
@@ -141,14 +163,8 @@ export class VeritasChainService {
           error: bcError
         });
         
-        // If journalist doesn't exist yet, return default stats
-        return {
-          reputation: 0,
-          articlesPublished: 0,
-          totalEarnings: "0",
-          followers: 0,
-          verificationRate: 0,
-        };
+        // Don't return fake data - let the UI handle the no-data case
+        throw new Error("No journalist data found on blockchain");
       }
     } catch (error) {
       console.error("Error fetching journalist stats from blockchain:", error);
@@ -229,13 +245,13 @@ export class VeritasChainService {
             const description = parts[3];
             const contentHash = parts[4];
             const publicationTimestamp = parseInt(parts[5]);
-            const lastUpdatedTimestamp = parseInt(parts[6]);
-            const currentVersionHash = parts[7];
-            const previousVersionHash = parts[8];
+            // const lastUpdatedTimestamp = parseInt(parts[6]); // Unused for now
+            // const currentVersionHash = parts[7]; // Unused for now  
+            // const previousVersionHash = parts[8]; // Unused for now
             const status = parts[9] as "pending" | "verified" | "rejected";
-            const monetizationModel = parts[10];
+            // const monetizationModel = parts[10]; // Unused for now
             const price = parseInt(parts[11]);
-            const totalViews = parseInt(parts[12]);
+            // const totalViews = parseInt(parts[12]); // Unused for now
             const upvotes = parseInt(parts[13]);
             const downvotes = parseInt(parts[14]);
 
@@ -293,7 +309,7 @@ export class VeritasChainService {
     price: number = 0
   ): Promise<string> {
     if (!this.wallet) {
-      throw new Error("Wallet not connected");
+      throw new Error("Wallet not connected to VeritasChain service. Please ensure wallet is properly connected.");
     }
 
     if (!CONTRACTS.ARTICLE_REGISTRY) {
@@ -309,51 +325,50 @@ export class VeritasChainService {
         price,
       });
 
-      // Get wallet accounts
+      // Get wallet accounts and verify connection
       const accounts = await this.wallet.accounts();
       if (!accounts.length) {
         throw new Error("No accounts available in wallet");
       }
 
       const account = accounts[0];
+      console.log("Using account:", await account.address);
 
-      // Check if wallet has sufficient balance
+      // Check wallet balance first
       try {
-        const walletAddress = await account.address;
-        console.log("Wallet address:", walletAddress);
-        console.log("Contract address:", CONTRACTS.ARTICLE_REGISTRY);
-        console.log("Environment check:");
-        console.log("- Node URL:", process.env.NEXT_PUBLIC_MASSA_NODE_URL);
-        console.log(
-          "- Article Registry:",
-          process.env.NEXT_PUBLIC_ARTICLE_REGISTRY_ADDRESS
-        );
-
-        // Try to get balance using a different method if available
-        // Let's see if the account has a balance method that works
-        // const balance = await account.balance();
-        // console.log("Wallet balance:", balance.toString());
+        const balance = await account.balance(true); // true for final balance
+        const balanceInMas = parseFloat(balance.toString()) / 1e9; // Convert to MAS
+        
+        console.log(`Wallet balance: ${balanceInMas} MAS`);
+        
+        // Minimum required: 0.15 MAS for gas + storage costs (increased based on error)
+        const minRequired = 0.15;
+        if (balanceInMas < minRequired) {
+          throw new Error(
+            `Insufficient balance. You have ${balanceInMas} MAS but need at least ${minRequired} MAS. Please add funds to your wallet.`
+          );
+        }
       } catch (balanceError) {
-        console.error("Error checking wallet info:", balanceError);
+        console.error("Error checking balance:", balanceError);
+        throw new Error("Unable to check wallet balance. Please ensure wallet is properly connected.");
       }
 
-      // Make blockchain call using the account directly
-      // Note: Smart contract expects (title, description, ipfsHash)
+      // Make blockchain call with sufficient coins for storage
       const operation = await account.callSC({
         target: CONTRACTS.ARTICLE_REGISTRY,
         func: "publishArticle",
         parameter: new Args()
           .addString(title)
-          .addString(title) // Use title as description for now
-          .addString(contentHash), // This is the IPFS hash
-        coins: Mas.fromString("0.05"), // Provide coins for gas and storage costs
+          .addString(title.substring(0, 100) + "...") // Use truncated title as description
+          .addString(contentHash), // IPFS hash
+        coins: Mas.fromString("0.1"), // Increased coins for storage costs
       });
 
       // Wait for operation to complete
       const status = await operation.waitSpeculativeExecution();
 
       if (status !== OperationStatus.SpeculativeSuccess) {
-        throw new Error("Transaction failed");
+        throw new Error(`Transaction failed with status: ${status}`);
       }
 
       const articleId = operation.id;
@@ -361,9 +376,16 @@ export class VeritasChainService {
       return articleId;
     } catch (error) {
       console.error("Error publishing article to blockchain:", error);
-      throw new Error(
-        "Failed to publish article to blockchain. Make sure contracts are deployed."
-      );
+      
+      // Provide specific error messages based on the error type
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("insufficient balance")) {
+        throw new Error("Insufficient wallet balance. Please add MAS tokens to your wallet.");
+      } else if (errorMessage.includes("Insufficient balance")) {
+        throw error; // Re-throw our custom balance error
+      } else {
+        throw new Error(`Failed to publish article: ${errorMessage}`);
+      }
     }
   }
 

@@ -38,15 +38,29 @@ export default function PublishPage() {
       return;
     }
 
+    if (!provider) {
+      toast.error("Wallet provider not available");
+      return;
+    }
+
+    // Ensure wallet is set in service
+    veritasChainService.setWallet(provider);
+
     setIsPublishing(true);
 
     try {
+      // First check if we can publish to blockchain (wallet balance, etc.)
+      console.log("Checking wallet connection and balance...");
+
       // Upload content to IPFS first
+      console.log("Uploading content to IPFS...");
       const contentHash = await veritasChainService.uploadToIPFS(
         article.content
       );
+      console.log("Content uploaded to IPFS:", contentHash);
 
-      // Publish article to blockchain
+      // Then publish article to blockchain
+      console.log("Publishing article to blockchain...");
       const articleId = await veritasChainService.publishArticle(
         article.title,
         contentHash,

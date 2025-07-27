@@ -80,15 +80,15 @@ export default function JournalistDashboard() {
     loadData();
   }, [isConnected, address]);
 
-  // Use real blockchain data instead of mock data
+  // Use real blockchain data - no fallback fake data
   const currentJournalist = {
     name: journalistStats ? "Verified Journalist" : "Journalist",
     address: address || "Not connected",
-    reputation: journalistStats?.reputation || 0,
-    articlesPublished: journalistStats?.articlesPublished || 0,
-    totalEarnings: journalistStats?.totalEarnings || "0",
-    followers: journalistStats?.followers || 0,
-    verificationRate: journalistStats?.verificationRate || 0,
+    reputation: journalistStats?.reputation,
+    articlesPublished: journalistStats?.articlesPublished,
+    totalEarnings: journalistStats?.totalEarnings,
+    followers: journalistStats?.followers,
+    verificationRate: journalistStats?.verificationRate,
   };
 
   // Show connection prompt if not connected
@@ -188,7 +188,11 @@ export default function JournalistDashboard() {
                 <Star className='h-4 w-4 text-yellow-500' />
               </div>
               <div className='text-2xl font-bold text-gray-900'>
-                {loadingStats ? "..." : `${currentJournalist.reputation}/100`}
+                {loadingStats ? "..." : 
+                 currentJournalist.reputation !== undefined ? 
+                   `${currentJournalist.reputation}/100` : 
+                   "No data available"
+                }
               </div>
             </CardHeader>
           </Card>
@@ -202,7 +206,11 @@ export default function JournalistDashboard() {
                 <PenTool className='h-4 w-4 text-blue-500' />
               </div>
               <div className='text-2xl font-bold text-gray-900'>
-                {loadingStats ? "..." : currentJournalist.articlesPublished}
+                {loadingStats ? "..." : 
+                 currentJournalist.articlesPublished !== undefined ? 
+                   currentJournalist.articlesPublished : 
+                   "No data available"
+                }
               </div>
             </CardHeader>
           </Card>
@@ -218,7 +226,9 @@ export default function JournalistDashboard() {
               <div className='text-2xl font-bold text-gray-900'>
                 {loadingStats
                   ? "..."
-                  : `${currentJournalist.totalEarnings} MAS`}
+                  : currentJournalist.totalEarnings !== undefined
+                  ? `${currentJournalist.totalEarnings} MAS`
+                  : "No data available"}
               </div>
             </CardHeader>
           </Card>
@@ -234,7 +244,9 @@ export default function JournalistDashboard() {
               <div className='text-2xl font-bold text-gray-900'>
                 {loadingStats
                   ? "..."
-                  : currentJournalist.followers.toLocaleString()}
+                  : currentJournalist.followers !== undefined
+                  ? currentJournalist.followers.toLocaleString()
+                  : "No data available"}
               </div>
             </CardHeader>
           </Card>

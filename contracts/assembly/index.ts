@@ -7,11 +7,15 @@ export {
   downvoteContent,
   getUserReputation,
   getArticleVotes,
+  stakeForVerification,
+  getJournalistStats,
+  resolveDispute,
 } from "./contracts/ReputationSystem";
 
 // Re-export all functions from ArticleRegistry
 export {
   publishArticle,
+  updateArticle,
   getArticle,
   getAuthorArticleCount,
   getArticlesByAuthor,
@@ -26,4 +30,6 @@ export {
   getEarnings,
   withdrawEarnings,
   hasArticleAccess,
+  hasActiveSubscription,
+  getArticlePrice,
 } from "./contracts/PaymentGateway";

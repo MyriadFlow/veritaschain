@@ -1,5 +1,4 @@
 {
-  "extends": "@massalabs/as-transformer/as-config.json",
   "targets": {
     "debug": {
       "outFile": "build/debug.wasm",
@@ -19,5 +18,6 @@
   },
   "options": {
     "bindings": "esm"
-  }
+  },
+  "include": ["assembly/**/*.ts"]
 }

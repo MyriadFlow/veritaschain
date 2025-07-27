@@ -41,16 +41,26 @@ export class Article {
 
 /**
  * Publishes a new article to the registry
- * @param binaryArgs - Serialized arguments containing title, description, ipfsHash
+ * @param binaryArgs - Serialized arguments containing title, description, ipfsHash, and optional monetization details
  */
-export function publishArticle(binaryArgs: StaticArray<u8>): void {
+export function publishArticle(binaryArgs: StaticArray<u8>): StaticArray<u8> {
   const args = new Args(binaryArgs);
-  const title = args.nextString().unwrap();
-  const description = args.nextString().unwrap();
-  const ipfsHash = args.nextString().unwrap();
+  const title = args
+    .nextString()
+    .expect("Title argument is missing or invalid");
+  const description = args
+    .nextString()
+    .expect("Description argument is missing or invalid");
+  const ipfsHash = args
+    .nextString()
+    .expect("IPFS hash argument is missing or invalid");
 
   const caller = Context.caller().toString();
   const currentTime = Context.timestamp().toString();
+
+  // Use default values for optional parameters
+  const monetizationModel = MonetizationModel.FREE;
+  const price = "0";
 
   // Generate unique article ID using timestamp and caller
   const articleId = `${caller}_${currentTime}`;
@@ -67,11 +77,11 @@ export function publishArticle(binaryArgs: StaticArray<u8>): void {
     ipfsHash, // current version hash is the IPFS hash
     "", // no previous version for new articles
     ArticleStatus.PUBLISHED,
-    MonetizationModel.FREE,
-    "0",
-    "0",
-    "0",
-    "0"
+    monetizationModel,
+    price,
+    "0", // views
+    "0", // upvotes
+    "0" // downvotes
   );
 
   // Store article metadata
@@ -98,6 +108,54 @@ export function publishArticle(binaryArgs: StaticArray<u8>): void {
   Storage.set(authorArticlesKey, newArticles);
 
   generateEvent(`Article published: ${articleId} by ${caller}`);
+
+  // Return the article ID for frontend integration
+  const result = new Args();
+  result.add(articleId);
+  return result.serialize();
+}
+
+/**
+ * Updates an existing article with new content
+ * @param binaryArgs - Serialized arguments containing articleId and newIpfsHash
+ */
+export function updateArticle(binaryArgs: StaticArray<u8>): void {
+  const args = new Args(binaryArgs);
+  const articleId = args
+    .nextString()
+    .expect("Article ID argument is missing or invalid");
+  const newIpfsHash = args
+    .nextString()
+    .expect("New IPFS hash argument is missing or invalid");
+
+  const caller = Context.caller().toString();
+  const articleKey = "ARTICLE_" + articleId;
+
+  if (!Storage.has(articleKey)) {
+    throw new Error("Article not found");
+  }
+
+  const articleData = Storage.get(articleKey);
+  const parts = articleData.split("|");
+
+  // Verify the caller is the author
+  if (parts[1] !== caller) {
+    throw new Error("Only the author can update this article");
+  }
+
+  // Update the article data
+  const currentTime = Context.timestamp().toString();
+  const previousVersionHash = parts[7]; // current version becomes previous
+
+  // Reconstruct article data with updated fields
+  parts[5] = currentTime; // lastUpdatedTimestamp
+  parts[7] = newIpfsHash; // currentVersionHash
+  parts[8] = previousVersionHash; // previousVersionHash
+
+  const updatedArticleData = parts.join("|");
+  Storage.set(articleKey, updatedArticleData);
+
+  generateEvent(`Article updated: ${articleId} by ${caller}`);
 }
 
 /**
@@ -106,7 +164,9 @@ export function publishArticle(binaryArgs: StaticArray<u8>): void {
  */
 export function getArticle(binaryArgs: StaticArray<u8>): StaticArray<u8> {
   const args = new Args(binaryArgs);
-  const articleId = args.nextString().unwrap();
+  const articleId = args
+    .nextString()
+    .expect("Article ID argument is missing or invalid");
 
   const articleKey = "ARTICLE_" + articleId;
 
@@ -130,7 +190,9 @@ export function getAuthorArticleCount(
   binaryArgs: StaticArray<u8>
 ): StaticArray<u8> {
   const args = new Args(binaryArgs);
-  const authorAddress = args.nextString().unwrap();
+  const authorAddress = args
+    .nextString()
+    .expect("Author address argument is missing or invalid");
 
   const authorCountKey = "AUTHOR_COUNT_" + authorAddress;
   const count = Storage.has(authorCountKey) ? Storage.get(authorCountKey) : "0";
@@ -148,7 +210,9 @@ export function getArticlesByAuthor(
   binaryArgs: StaticArray<u8>
 ): StaticArray<u8> {
   const args = new Args(binaryArgs);
-  const authorAddress = args.nextString().unwrap();
+  const authorAddress = args
+    .nextString()
+    .expect("Author address argument is missing or invalid");
 
   const authorArticlesKey = "AUTHOR_ARTICLES_" + authorAddress;
   const articles = Storage.has(authorArticlesKey)
@@ -166,7 +230,9 @@ export function getArticlesByAuthor(
  */
 export function incrementViewCount(binaryArgs: StaticArray<u8>): void {
   const args = new Args(binaryArgs);
-  const articleId = args.nextString().unwrap();
+  const articleId = args
+    .nextString()
+    .expect("Article ID argument is missing or invalid");
 
   const viewKey = "VIEWS_" + articleId;
   const currentViews = Storage.has(viewKey) ? Storage.get(viewKey) : "0";

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-const { execSync } = require("child_process");
-const fs = require("fs");
-const path = require("path");
+import { execSync } from "child_process";
+import fs from "fs";
+import path from "path";
 
 // Contract build script for VeritasChain
 const contracts = ["ArticleRegistry", "ReputationSystem", "PaymentGateway"];
@@ -66,8 +66,7 @@ function main() {
   }
 }
 
-if (require.main === module) {
-  main();
-}
+export { buildContract, contracts };
 
-module.exports = { buildContract, contracts };
+// Run main if this is the entry point
+main();

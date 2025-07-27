@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@massalabs/massa-sc-utils": "^2.2.0",
     "@massalabs/massa-web3": "^5.2.0",
     "@massalabs/wallet-provider": "^3.2.0",
     "@radix-ui/react-dialog": "^1.1.14",
@@ -21,6 +22,7 @@
     "next": "14.2.24",
     "react": "^18",
     "react-dom": "^18",
+    "react-toastify": "^11.0.5",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7"
   },

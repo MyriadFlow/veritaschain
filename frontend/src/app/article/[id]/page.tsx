@@ -18,6 +18,13 @@ import {
   Eye,
   MessageCircle,
 } from "lucide-react";
+
+// Generate static params for build
+export async function generateStaticParams() {
+  return mockArticles.map((article) => ({
+    id: article.id.toString(),
+  }));
+}
 import { useState } from "react";
 
 interface ArticlePageProps {

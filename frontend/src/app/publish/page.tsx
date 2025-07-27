@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { toast } from "react-toastify";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useWeb3 } from "@/lib/web3-context";
+import { useWallet } from "@/lib/wallet-provider";
+import { veritasChainService } from "@/lib/veritas-service";
 import { Upload, Eye, Globe, Shield, Save, Send } from "lucide-react";
 
 export default function PublishPage() {
-  const { isConnected } = useWeb3();
+  const { isConnected, connect, loading, provider } = useWallet();
   const [isPublishing, setIsPublishing] = useState(false);
   const [article, setArticle] = useState({
     title: "",
@@ -22,22 +24,59 @@ export default function PublishPage() {
     stake: "10",
   });
 
+  // Set wallet in service when connected
+  useEffect(() => {
+    if (isConnected && provider) {
+      veritasChainService.setWallet(provider);
+      console.log("Wallet set in veritas service for publishing");
+    }
+  }, [isConnected, provider]);
+
   const handlePublish = async () => {
     if (!isConnected) {
-      alert("Please connect your wallet first");
+      toast.error("Please connect your wallet first");
       return;
     }
 
     setIsPublishing(true);
-    // Simulate publishing
-    setTimeout(() => {
+
+    try {
+      // Upload content to IPFS first
+      const contentHash = await veritasChainService.uploadToIPFS(
+        article.content
+      );
+
+      // Publish article to blockchain
+      const articleId = await veritasChainService.publishArticle(
+        article.title,
+        contentHash,
+        article.monetization === "paid" ? parseFloat(article.price) || 0 : 0
+      );
+
+      console.log("Article published with ID:", articleId);
+      toast.success("Article published successfully to the blockchain!");
+
+      // Reset form
+      setArticle({
+        title: "",
+        subtitle: "",
+        content: "",
+        category: "",
+        tags: "",
+        monetization: "free",
+        price: "",
+        stake: "10",
+      });
+    } catch (error) {
+      console.error("Error publishing article:", error);
+      toast.error("Failed to publish article. Please try again.");
+    } finally {
       setIsPublishing(false);
-      alert("Article published successfully!");
-    }, 2000);
+    }
   };
 
   const handleSaveDraft = () => {
-    alert("Draft saved successfully!");
+    toast.success("Draft saved successfully!");
   };
 
   if (!isConnected) {
@@ -53,8 +92,13 @@ export default function PublishPage() {
               You need to connect your Massa wallet to publish articles on
               VeritasChain.
             </p>
-            <Button size='lg' className='bg-gray-900 hover:bg-gray-800'>
-              Connect Wallet
+            <Button
+              size='lg'
+              className='bg-gray-900 hover:bg-gray-800'
+              onClick={connect}
+              disabled={loading}
+            >
+              {loading ? "Connecting..." : "Connect Wallet"}
             </Button>
           </div>
         </div>

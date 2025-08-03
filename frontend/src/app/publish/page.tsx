@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "react-toastify";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,29 @@ import { useWallet } from "@/lib/wallet-provider";
 import { veritasChainService } from "@/lib/veritas-service";
 import { Upload, Eye, Globe, Shield, Save, Send } from "lucide-react";
 
+interface ArticleDraft {
+  title: string;
+  subtitle: string;
+  content: string;
+  category: string;
+  tags: string;
+  monetization: string;
+  price: string;
+  stake: string;
+  coverImagePreview?: string;
+  timestamp: number;
+  id: string;
+}
+
 export default function PublishPage() {
   const { isConnected, connect, loading, provider } = useWallet();
   const [isPublishing, setIsPublishing] = useState(false);
+  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(
+    null
+  );
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [article, setArticle] = useState({
     title: "",
     subtitle: "",
@@ -31,6 +51,51 @@ export default function PublishPage() {
       console.log("Wallet set in veritas service for publishing");
     }
   }, [isConnected, provider]);
+
+  const handleCoverImageSelect = (file: File) => {
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Please select a JPEG, PNG, or WebP image");
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      toast.error("Image size must be less than 5MB");
+      return;
+    }
+
+    setCoverImage(file);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setCoverImagePreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCoverImageUpload = async (file: File): Promise<string> => {
+    setIsUploadingImage(true);
+    try {
+      const imageHash = await veritasChainService.uploadImageToIPFS(file);
+      toast.success("Cover image uploaded successfully!");
+      return imageHash;
+    } catch (error) {
+      console.error("Error uploading cover image:", error);
+      toast.error("Failed to upload cover image");
+      throw error;
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const removeCoverImage = () => {
+    setCoverImage(null);
+    setCoverImagePreview(null);
+  };
 
   const handlePublish = async () => {
     if (!isConnected) {
@@ -52,14 +117,36 @@ export default function PublishPage() {
       // First check if we can publish to blockchain (wallet balance, etc.)
       console.log("Checking wallet connection and balance...");
 
-      // Upload content to IPFS first
-      console.log("Uploading content to IPFS...");
-      const contentHash = await veritasChainService.uploadToIPFS(
-        article.content
-      );
-      console.log("Content uploaded to IPFS:", contentHash);
+      // Upload cover image to IPFS if present
+      let coverImageHash = "";
+      if (coverImage) {
+        console.log("Uploading cover image to IPFS...");
+        coverImageHash = await handleCoverImageUpload(coverImage);
+      }
 
-      // Then publish article to blockchain
+      // Create article metadata object including all form data
+      const articleMetadata = {
+        content: article.content,
+        subtitle: article.subtitle,
+        category: article.category,
+        tags: article.tags
+          ? article.tags.split(",").map((tag) => tag.trim())
+          : [],
+        coverImage: coverImageHash,
+        monetization: article.monetization,
+        stake: article.stake,
+        timestamp: Date.now(),
+        platform: "VeritasChain",
+      };
+
+      // Upload complete metadata to IPFS
+      console.log("Uploading article metadata to IPFS...");
+      const contentHash = await veritasChainService.uploadToIPFS(
+        JSON.stringify(articleMetadata)
+      );
+      console.log("Article metadata uploaded to IPFS:", contentHash);
+
+      // Then publish article to blockchain with title, subtitle as description, and contentHash
       console.log("Publishing article to blockchain...");
       const articleId = await veritasChainService.publishArticle(
         article.title,
@@ -81,6 +168,8 @@ export default function PublishPage() {
         price: "",
         stake: "10",
       });
+      setCoverImage(null);
+      setCoverImagePreview(null);
     } catch (error) {
       console.error("Error publishing article:", error);
       toast.error("Failed to publish article. Please try again.");
@@ -89,8 +178,115 @@ export default function PublishPage() {
     }
   };
 
+  const saveDraft = () => {
+    try {
+      const draft = {
+        ...article,
+        coverImagePreview,
+        timestamp: Date.now(),
+        id: Date.now().toString(),
+      };
+
+      // Get existing drafts
+      const existingDrafts =
+        typeof window !== "undefined"
+          ? JSON.parse(localStorage.getItem("veritaschain_drafts") || "[]")
+          : [];
+
+      // Add new draft
+      existingDrafts.push(draft);
+
+      // Keep only last 10 drafts
+      const recentDrafts = existingDrafts.slice(-10);
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem(
+          "veritaschain_drafts",
+          JSON.stringify(recentDrafts)
+        );
+      }
+      toast.success("Draft saved successfully!");
+    } catch (error) {
+      console.error("Error saving draft:", error);
+      toast.error("Failed to save draft");
+    }
+  };
+
+  const loadDrafts = () => {
+    try {
+      const drafts =
+        typeof window !== "undefined"
+          ? JSON.parse(localStorage.getItem("veritaschain_drafts") || "[]")
+          : [];
+      return drafts;
+    } catch (error) {
+      console.error("Error loading drafts:", error);
+      return [];
+    }
+  };
+
+  const loadDraft = (draft: ArticleDraft) => {
+    setArticle({
+      title: draft.title || "",
+      subtitle: draft.subtitle || "",
+      content: draft.content || "",
+      category: draft.category || "",
+      tags: draft.tags || "",
+      monetization: draft.monetization || "free",
+      price: draft.price || "",
+      stake: draft.stake || "10",
+    });
+
+    if (draft.coverImagePreview) {
+      setCoverImagePreview(draft.coverImagePreview);
+    }
+
+    toast.success("Draft loaded successfully!");
+  };
+
+  // Load last draft on component mount - using useRef to avoid dependency issues
+  const hasLoadedDraft = useRef(false);
+  useEffect(() => {
+    if (!hasLoadedDraft.current) {
+      const drafts = loadDrafts();
+      if (drafts.length > 0) {
+        const lastDraft = drafts[drafts.length - 1];
+        // Only auto-load if form is empty and user confirms
+        if (
+          !article.title &&
+          !article.content &&
+          typeof window !== "undefined" &&
+          window.confirm("Load your last draft?")
+        ) {
+          loadDraft(lastDraft);
+        }
+      }
+      hasLoadedDraft.current = true;
+    }
+  }, [article.title, article.content]);
+
   const handleSaveDraft = () => {
-    toast.success("Draft saved successfully!");
+    saveDraft();
+  };
+
+  const handlePreview = () => {
+    setShowPreview(true);
+  };
+
+  const closePreview = () => {
+    setShowPreview(false);
+  };
+
+  const formatContent = (content: string) => {
+    // Simple markdown-like formatting
+    return content
+      .replace(/^# (.+)$/gm, '<h1 class="text-3xl font-bold mb-4">$1</h1>')
+      .replace(/^## (.+)$/gm, '<h2 class="text-2xl font-semibold mb-3">$1</h2>')
+      .replace(/^### (.+)$/gm, '<h3 class="text-xl font-medium mb-2">$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/\n\n/g, '</p><p class="mb-4">')
+      .replace(/\n/g, "<br/>");
   };
 
   if (!isConnected) {
@@ -212,15 +408,62 @@ export default function PublishPage() {
                 <label className='block text-sm font-medium text-gray-700 mb-2'>
                   Cover Image
                 </label>
-                <div className='border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer'>
-                  <Upload className='h-8 w-8 text-gray-400 mx-auto mb-2' />
-                  <p className='text-sm text-gray-600'>
-                    Click to upload or drag and drop your cover image
-                  </p>
-                  <p className='text-xs text-gray-500 mt-1'>
-                    Recommended: 1600x900 pixels, under 5MB
-                  </p>
-                </div>
+                {coverImagePreview ? (
+                  <div className='relative'>
+                    <img
+                      src={coverImagePreview}
+                      alt='Cover preview'
+                      className='w-full h-48 object-cover rounded-lg'
+                    />
+                    <button
+                      type='button'
+                      onClick={removeCoverImage}
+                      className='absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600'
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    className='border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer'
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        document.getElementById("coverImageInput")?.click();
+                      }
+                    }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const files = Array.from(e.dataTransfer.files);
+                      if (files.length > 0) {
+                        handleCoverImageSelect(files[0]);
+                      }
+                    }}
+                  >
+                    <Upload className='h-8 w-8 text-gray-400 mx-auto mb-2' />
+                    <p className='text-sm text-gray-600'>
+                      Click to upload or drag and drop your cover image
+                    </p>
+                    <p className='text-xs text-gray-500 mt-1'>
+                      Recommended: 1600x900 pixels, under 5MB
+                    </p>
+                    {isUploadingImage && (
+                      <p className='text-xs text-blue-500 mt-2'>Uploading...</p>
+                    )}
+                  </div>
+                )}
+                <input
+                  id='coverImageInput'
+                  type='file'
+                  accept='image/jpeg,image/jpg,image/png,image/webp'
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (files && files.length > 0) {
+                      handleCoverImageSelect(files[0]);
+                    }
+                  }}
+                  className='hidden'
+                />
               </div>
 
               {/* Category and Tags */}
@@ -401,13 +644,93 @@ export default function PublishPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Button variant='outline' className='w-full'>
+                <Button
+                  variant='outline'
+                  className='w-full'
+                  onClick={handlePreview}
+                  disabled={!article.title && !article.content}
+                >
                   Preview Article
                 </Button>
               </CardContent>
             </Card>
           </div>
         </div>
+
+        {/* Preview Modal */}
+        {showPreview && (
+          <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'>
+            <div className='bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto'>
+              <div className='sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center'>
+                <h2 className='text-xl font-semibold'>Article Preview</h2>
+                <button
+                  onClick={closePreview}
+                  className='text-gray-500 hover:text-gray-700 text-2xl'
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className='p-6'>
+                {/* Cover Image Preview */}
+                {coverImagePreview && (
+                  <div className='mb-6'>
+                    <img
+                      src={coverImagePreview}
+                      alt='Article cover'
+                      className='w-full h-64 object-cover rounded-lg'
+                    />
+                  </div>
+                )}
+
+                {/* Article Content */}
+                <article className='prose prose-lg max-w-none'>
+                  <h1 className='text-4xl font-bold mb-2'>
+                    {article.title || "Untitled Article"}
+                  </h1>
+                  {article.subtitle && (
+                    <p className='text-xl text-gray-600 mb-6'>
+                      {article.subtitle}
+                    </p>
+                  )}
+
+                  {/* Metadata */}
+                  <div className='flex flex-wrap gap-4 mb-6 text-sm text-gray-500 border-b pb-4'>
+                    {article.category && (
+                      <span className='bg-gray-100 px-2 py-1 rounded'>
+                        Category: {article.category}
+                      </span>
+                    )}
+                    {article.tags && (
+                      <span className='bg-gray-100 px-2 py-1 rounded'>
+                        Tags: {article.tags}
+                      </span>
+                    )}
+                    <span className='bg-gray-100 px-2 py-1 rounded'>
+                      {article.monetization === "paid"
+                        ? `Premium (${article.price} MAS)`
+                        : "Free"}
+                    </span>
+                  </div>
+
+                  {/* Article Content */}
+                  {article.content ? (
+                    <div
+                      className='text-gray-800 leading-relaxed'
+                      dangerouslySetInnerHTML={{
+                        __html: `<p class="mb-4">${formatContent(
+                          article.content
+                        )}</p>`,
+                      }}
+                    />
+                  ) : (
+                    <p className='text-gray-500 italic'>No content yet...</p>
+                  )}
+                </article>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

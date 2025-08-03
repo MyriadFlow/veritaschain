@@ -160,43 +160,13 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className='aspect-[4/3] bg-gray-200 rounded-lg overflow-hidden'>
+          {/* <div className='aspect-[4/3] bg-gray-200 rounded-lg overflow-hidden'>
             <div className='w-full h-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center'>
               <span className='text-gray-600 font-medium'>
                 Featured Article Image
               </span>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Platform Stats */}
-      <section className='bg-white py-16'>
-        <div className='max-w-6xl mx-auto px-4'>
-          <div className='grid grid-cols-1 md:grid-cols-4 gap-8 text-center'>
-            <div className='space-y-2'>
-              <div className='text-3xl font-bold text-gray-900'>2,847</div>
-              <div className='text-gray-600 font-medium'>
-                Articles Published
-              </div>
-            </div>
-            <div className='space-y-2'>
-              <div className='text-3xl font-bold text-gray-900'>1,293</div>
-              <div className='text-gray-600 font-medium'>
-                Verified Journalists
-              </div>
-            </div>
-            <div className='space-y-2'>
-              <div className='text-3xl font-bold text-gray-900'>98.7%</div>
-              <div className='text-gray-600 font-medium'>Accuracy Rate</div>
-            </div>
-            <div className='space-y-2'>
-              <div className='text-3xl font-bold text-gray-900'>$847K</div>
-              <div className='text-gray-600 font-medium'>
-                Paid to Journalists
-              </div>
-            </div>
-          </div>
+          </div> */}
         </div>
       </section>
 

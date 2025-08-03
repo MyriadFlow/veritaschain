@@ -60,10 +60,9 @@ export default function JournalistDashboard() {
           ]);
 
           setJournalistStats(stats);
-          setMyArticles(articles.slice(0, 3)); // Show only latest 3 on dashboard
+          setMyArticles(articles.slice(0, 3));
 
-          // Show success message
-          toast.success("Dashboard data loaded successfully!");
+          // Data loaded successfully - no need for success toast
         } catch (error) {
           console.error(
             "Error loading journalist data from blockchain:",
@@ -188,11 +187,11 @@ export default function JournalistDashboard() {
                 <Star className='h-4 w-4 text-yellow-500' />
               </div>
               <div className='text-2xl font-bold text-gray-900'>
-                {loadingStats ? "..." : 
-                 currentJournalist.reputation !== undefined ? 
-                   `${currentJournalist.reputation}/100` : 
-                   "No data available"
-                }
+                {loadingStats
+                  ? "..."
+                  : currentJournalist.reputation !== undefined
+                  ? `${currentJournalist.reputation}/100`
+                  : "No data available"}
               </div>
             </CardHeader>
           </Card>
@@ -206,11 +205,11 @@ export default function JournalistDashboard() {
                 <PenTool className='h-4 w-4 text-blue-500' />
               </div>
               <div className='text-2xl font-bold text-gray-900'>
-                {loadingStats ? "..." : 
-                 currentJournalist.articlesPublished !== undefined ? 
-                   currentJournalist.articlesPublished : 
-                   "No data available"
-                }
+                {loadingStats
+                  ? "..."
+                  : currentJournalist.articlesPublished !== undefined
+                  ? currentJournalist.articlesPublished
+                  : "No data available"}
               </div>
             </CardHeader>
           </Card>
@@ -254,53 +253,59 @@ export default function JournalistDashboard() {
 
         {/* Quick Actions */}
         <div className='grid grid-cols-1 md:grid-cols-3 gap-6 mb-8'>
-          <Card className='hover:shadow-lg transition-shadow cursor-pointer'>
-            <CardHeader>
-              <div className='flex items-center space-x-3'>
-                <div className='w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center'>
-                  <PenTool className='h-5 w-5 text-blue-600' />
+          <Link href='/publish'>
+            <Card className='hover:shadow-lg transition-shadow cursor-pointer'>
+              <CardHeader>
+                <div className='flex items-center space-x-3'>
+                  <div className='w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center'>
+                    <PenTool className='h-5 w-5 text-blue-600' />
+                  </div>
+                  <div>
+                    <CardTitle className='text-lg'>Publish Article</CardTitle>
+                    <CardDescription>
+                      Create and publish new journalism content
+                    </CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className='text-lg'>Publish Article</CardTitle>
-                  <CardDescription>
-                    Create and publish new journalism content
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-          </Card>
+              </CardHeader>
+            </Card>
+          </Link>
 
-          <Card className='hover:shadow-lg transition-shadow cursor-pointer'>
-            <CardHeader>
-              <div className='flex items-center space-x-3'>
-                <div className='w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center'>
-                  <TrendingUp className='h-5 w-5 text-green-600' />
+          <Link href='/analytics'>
+            <Card className='hover:shadow-lg transition-shadow cursor-pointer'>
+              <CardHeader>
+                <div className='flex items-center space-x-3'>
+                  <div className='w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center'>
+                    <TrendingUp className='h-5 w-5 text-green-600' />
+                  </div>
+                  <div>
+                    <CardTitle className='text-lg'>Analytics</CardTitle>
+                    <CardDescription>
+                      View article performance and engagement (Coming Soon)
+                    </CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className='text-lg'>Analytics</CardTitle>
-                  <CardDescription>
-                    View article performance and engagement
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-          </Card>
+              </CardHeader>
+            </Card>
+          </Link>
 
-          <Card className='hover:shadow-lg transition-shadow cursor-pointer'>
-            <CardHeader>
-              <div className='flex items-center space-x-3'>
-                <div className='w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center'>
-                  <DollarSign className='h-5 w-5 text-purple-600' />
+          <Link href='/earnings'>
+            <Card className='hover:shadow-lg transition-shadow cursor-pointer'>
+              <CardHeader>
+                <div className='flex items-center space-x-3'>
+                  <div className='w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center'>
+                    <DollarSign className='h-5 w-5 text-purple-600' />
+                  </div>
+                  <div>
+                    <CardTitle className='text-lg'>Earnings</CardTitle>
+                    <CardDescription>
+                      Track payments and withdraw funds (Coming Soon)
+                    </CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className='text-lg'>Earnings</CardTitle>
-                  <CardDescription>
-                    Track payments and withdraw funds
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-          </Card>
+              </CardHeader>
+            </Card>
+          </Link>
         </div>
 
         {/* My Articles */}

@@ -1,4 +1,4 @@
-import { Article, Author, Vote } from "./types-fixed";
+import { Article, Author, Vote } from "./types";
 
 export const mockAuthors: Author[] = [
   {

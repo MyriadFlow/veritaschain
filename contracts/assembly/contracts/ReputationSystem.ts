@@ -1,4 +1,4 @@
-// Import using the proper AS SDK approach
+
 import { call, Context, generateEvent, Storage } from "@massalabs/massa-as-sdk";
 import { Args } from "@massalabs/as-types";
 
@@ -182,11 +182,11 @@ export function getJournalistStats(
     .nextString()
     .expect("Journalist address argument is missing or invalid");
 
-  // Get reputation
+  // Get reputation - new journalists start with 50/100 reputation
   const reputationKey = REPUTATION_PREFIX + journalistAddress;
   const reputation = Storage.has(reputationKey)
     ? Storage.get(reputationKey)
-    : "100";
+    : "50";
 
   // Get article count (from ArticleRegistry)
   const articleCountKey = "AUTHOR_COUNT_" + journalistAddress;
@@ -200,9 +200,9 @@ export function getJournalistStats(
     ? Storage.get(earningsKey)
     : "0";
 
-  // Calculate verification rate (simplified)
+  // Calculate verification rate - new journalists start with lower rate
   const statsKey = JOURNALIST_STATS_PREFIX + journalistAddress;
-  const verificationRate = Storage.has(statsKey) ? Storage.get(statsKey) : "85"; // Default 85%
+  const verificationRate = Storage.has(statsKey) ? Storage.get(statsKey) : "0"; // New journalists have no verification history
 
   const result = new Args();
   result.add(reputation); // reputation score

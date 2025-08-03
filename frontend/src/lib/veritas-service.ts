@@ -1,5 +1,7 @@
 import { Wallet } from "@massalabs/wallet-provider";
 import { Args, OperationStatus, Mas } from "@massalabs/massa-web3";
+import { getWallets } from "@massalabs/wallet-provider";
+import { Article as ArticleType, Author } from "./types";
 
 // Real contract addresses on Massa blockchain - will be set when contracts are deployed
 export const CONTRACTS = {
@@ -21,6 +23,12 @@ export interface Article {
   excerpt?: string;
   voteCount?: number;
   publishedAt?: number;
+  // Additional fields for full article display
+  content?: string;
+  coverImage?: string;
+  subtitle?: string;
+  category?: string;
+  tags?: string[];
 }
 
 export interface JournalistStats {
@@ -59,7 +67,7 @@ export class VeritasChainService {
       const account = accounts[0];
       const balance = await account.balance(true); // true for final balance
       const balanceInMas = parseFloat(balance.toString()) / 1e9;
-      
+
       return balanceInMas.toFixed(4);
     } catch (error) {
       console.error("Error getting wallet balance:", error);
@@ -99,9 +107,9 @@ export class VeritasChainService {
   }
 
   async getJournalistStats(address: string): Promise<JournalistStats> {
-    if (!CONTRACTS.REPUTATION_SYSTEM) {
+    if (!CONTRACTS.REPUTATION_SYSTEM || !CONTRACTS.ARTICLE_REGISTRY) {
       throw new Error(
-        "Reputation contract not deployed. Please deploy smart contracts first."
+        "Contracts not deployed. Please deploy smart contracts first."
       );
     }
 
@@ -120,28 +128,50 @@ export class VeritasChainService {
 
       const account = accounts[0];
 
-      // Make blockchain read call using the account directly (like in the sandbox examples)
+      // Get reputation and verification rate from ReputationSystem
       try {
-        const result = await account.readSC({
+        const reputationResult = await account.readSC({
           target: CONTRACTS.REPUTATION_SYSTEM,
           func: "getJournalistStats",
           parameter: new Args().addString(address),
         });
 
-        console.log("Raw blockchain result:", result);
+        console.log("Raw reputation result:", reputationResult);
 
-        // Parse the result from smart contract
-        const resultArgs = new Args(result.value);
-        // The smart contract returns all values as strings: reputation, articlesPublished, totalEarnings, followers, verificationRate
-        const reputation = resultArgs.nextString();
-        const articlesPublished = resultArgs.nextString();
-        const totalEarnings = resultArgs.nextString();
-        const followers = resultArgs.nextString();
-        const verificationRate = resultArgs.nextString();
+        // Parse the result from reputation contract
+        const reputationArgs = new Args(reputationResult.value);
+        const reputation = reputationArgs.nextString();
+        reputationArgs.nextString(); // Skip articlesPublished from reputation contract (will be 0)
+        const totalEarnings = reputationArgs.nextString();
+        const followers = reputationArgs.nextString();
+        const verificationRate = reputationArgs.nextString();
+
+        // Get actual article count from ArticleRegistry
+        let actualArticlesPublished = "0";
+        try {
+          const articlesResult = await account.readSC({
+            target: CONTRACTS.ARTICLE_REGISTRY,
+            func: "getArticlesByAuthor",
+            parameter: new Args().addString(address),
+          });
+
+          const articlesArgs = new Args(articlesResult.value);
+          const articleIdsString = articlesArgs.nextString();
+
+          // Count the actual articles
+          if (articleIdsString && articleIdsString.trim() !== "") {
+            const articleIds = articleIdsString
+              .split(",")
+              .filter((id) => id.trim() !== "");
+            actualArticlesPublished = articleIds.length.toString();
+          }
+        } catch (articlesError) {
+          console.warn("Failed to get article count, using 0:", articlesError);
+        }
 
         console.log("Parsed values:", {
           reputation,
-          articlesPublished,
+          articlesPublished: actualArticlesPublished,
           totalEarnings,
           followers,
           verificationRate,
@@ -149,20 +179,23 @@ export class VeritasChainService {
 
         return {
           reputation: Number(reputation),
-          articlesPublished: Number(articlesPublished),
+          articlesPublished: Number(actualArticlesPublished),
           totalEarnings,
           followers: Number(followers),
           verificationRate: Number(verificationRate),
         };
       } catch (bcError) {
-        console.error("Blockchain call failed for getJournalistStats:", bcError);
+        console.error(
+          "Blockchain call failed for getJournalistStats:",
+          bcError
+        );
         console.error("Error details:", {
           contractAddress: CONTRACTS.REPUTATION_SYSTEM,
           function: "getJournalistStats",
           parameter: address,
-          error: bcError
+          error: bcError,
         });
-        
+
         // Don't return fake data - let the UI handle the no-data case
         throw new Error("No journalist data found on blockchain");
       }
@@ -209,7 +242,7 @@ export class VeritasChainService {
       // Parse the result from smart contract - it returns a comma-separated string of article IDs
       const resultArgs = new Args(result.value);
       const articleIdsString = resultArgs.nextString();
-      
+
       console.log("Article IDs string from contract:", articleIdsString);
 
       // If no articles, return empty array
@@ -219,7 +252,9 @@ export class VeritasChainService {
       }
 
       // Split the comma-separated string into individual article IDs
-      const articleIds = articleIdsString.split(",").filter(id => id.trim() !== "");
+      const articleIds = articleIdsString
+        .split(",")
+        .filter((id) => id.trim() !== "");
       const articles: Article[] = [];
 
       // For each article ID, fetch the full article data
@@ -233,11 +268,11 @@ export class VeritasChainService {
 
           const articleResultArgs = new Args(articleResult.value);
           const articleDataString = articleResultArgs.nextString();
-          
+
           // Parse the pipe-separated article data
           // Format: id|authorAddress|title|description|ipfsContentHash|publicationTimestamp|lastUpdatedTimestamp|currentVersionHash|previousVersionHash|status|monetizationModel|price|totalViews|totalUpvotes|totalDownvotes
           const parts = articleDataString.split("|");
-          
+
           if (parts.length >= 15) {
             const id = parts[0];
             const author = parts[1];
@@ -246,7 +281,7 @@ export class VeritasChainService {
             const contentHash = parts[4];
             const publicationTimestamp = parseInt(parts[5]);
             // const lastUpdatedTimestamp = parseInt(parts[6]); // Unused for now
-            // const currentVersionHash = parts[7]; // Unused for now  
+            // const currentVersionHash = parts[7]; // Unused for now
             // const previousVersionHash = parts[8]; // Unused for now
             const status = parts[9] as "pending" | "verified" | "rejected";
             // const monetizationModel = parts[10]; // Unused for now
@@ -278,7 +313,7 @@ export class VeritasChainService {
               title,
               contentHash,
               author,
-              price: price / 100, // Convert from cents if needed
+              price: price / 100,
               timestamp: publicationTimestamp,
               upvotes,
               downvotes,
@@ -303,13 +338,215 @@ export class VeritasChainService {
     }
   }
 
+  async getAllPublishedArticles(): Promise<ArticleType[]> {
+    try {
+      console.log("Fetching all published articles from blockchain");
+
+      if (!CONTRACTS.ARTICLE_REGISTRY) {
+        console.warn(
+          "Article registry contract not deployed, returning empty array"
+        );
+        return [];
+      }
+
+      // Create a read-only connection using getWallets
+      const wallets = await getWallets();
+
+      if (!wallets || wallets.length === 0) {
+        console.warn("No wallet providers available, returning empty array");
+        return [];
+      }
+
+      const provider = wallets[0];
+      const accounts = await provider.accounts();
+
+      if (!accounts.length) {
+        console.warn("No accounts available, returning empty array");
+        return [];
+      }
+
+      const account = accounts[0];
+
+      // First, get all published article IDs from the smart contract
+      const articleCountResult = await account.readSC({
+        target: CONTRACTS.ARTICLE_REGISTRY,
+        func: "getArticleCount",
+        parameter: new Args(),
+      });
+
+      const articleCountArgs = new Args(articleCountResult.value);
+      const totalArticles = articleCountArgs.nextU64();
+
+      const articles: ArticleType[] = [];
+
+      // Iterate through all articles and fetch their details
+      for (let i = 0; i < Number(totalArticles); i++) {
+        try {
+          const articleIdResult = await account.readSC({
+            target: CONTRACTS.ARTICLE_REGISTRY,
+            func: "getArticleByIndex",
+            parameter: new Args().addU64(BigInt(i)),
+          });
+
+          const articleIdArgs = new Args(articleIdResult.value);
+          const articleId = articleIdArgs.nextString();
+
+          // Get the full article details
+          const article = await this.getArticleById(articleId);
+          if (article) {
+            articles.push(article);
+          }
+        } catch (articleError) {
+          console.warn(`Failed to fetch article at index ${i}:`, articleError);
+        }
+      }
+
+      console.log(
+        `Fetched ${articles.length} published articles from blockchain`
+      );
+      return articles;
+    } catch (error) {
+      console.error("Error fetching all published articles:", error);
+      return []; // Return empty array instead of throwing error for generateStaticParams
+    }
+  }
+
+  async getArticleById(articleId: string): Promise<ArticleType | null> {
+    try {
+      console.log("Fetching article from blockchain:", articleId);
+
+      if (!CONTRACTS.ARTICLE_REGISTRY) {
+        console.warn("Article registry contract not deployed, using mock data");
+        return null;
+      }
+
+      // Create a read-only connection using getWallets
+      const wallets = await getWallets();
+
+      if (!wallets || wallets.length === 0) {
+        console.warn("No wallet providers available, using mock data");
+        return null;
+      }
+
+      const provider = wallets[0];
+      const accounts = await provider.accounts();
+
+      if (!accounts.length) {
+        console.warn("No accounts available, using mock data");
+        return null;
+      }
+
+      const account = accounts[0];
+
+      const articleResult = await account.readSC({
+        target: CONTRACTS.ARTICLE_REGISTRY,
+        func: "getArticle",
+        parameter: new Args().addString(articleId.trim()),
+      });
+      const articleResultArgs = new Args(articleResult.value);
+      const articleDataString = articleResultArgs.nextString();
+
+      // Parse the pipe-separated article data
+      const parts = articleDataString.split("|");
+
+      if (parts.length >= 15) {
+        const id = parts[0];
+        const author = parts[1];
+        const title = parts[2];
+        const description = parts[3];
+        const contentHash = parts[4];
+        const publicationTimestamp = parseInt(parts[5]);
+        const status = parts[9] as "pending" | "verified" | "rejected";
+        const price = parseInt(parts[11]);
+        const upvotes = parseInt(parts[13]);
+        const downvotes = parseInt(parts[14]);
+
+        // Fetch full content from IPFS
+        let content = description || title;
+        let coverImage = "";
+        let subtitle = "";
+        let category = "";
+        let tags: string[] = [];
+
+        try {
+          const ipfsResponse = await fetch(
+            `https://gateway.pinata.cloud/ipfs/${contentHash}`
+          );
+          if (ipfsResponse.ok) {
+            const ipfsData = await ipfsResponse.json();
+            content = ipfsData.content || content;
+            coverImage = ipfsData.coverImage || "";
+            subtitle = ipfsData.subtitle || "";
+            category = ipfsData.category || "";
+            tags = ipfsData.tags || [];
+          }
+        } catch (ipfsError) {
+          console.warn("Failed to fetch IPFS content:", ipfsError);
+        }
+
+        // Create author object
+        const authorObj: Author = {
+          id: author,
+          name: author,
+          bio: "Journalist on VeritasChain",
+          avatar: "/images/default-avatar.png",
+          reputation: upvotes - downvotes,
+          articlesPublished: 1,
+          totalVotes: upvotes + downvotes,
+          joinedDate: new Date(publicationTimestamp * 1000).toISOString(),
+          walletAddress: author,
+          verified: status === "verified",
+        };
+
+        return {
+          id,
+          title,
+          subtitle: subtitle || description,
+          content,
+          excerpt:
+            content.length > 150 ? content.substring(0, 150) + "..." : content,
+          coverImage: coverImage || "/images/default-article.png",
+          author: authorObj,
+          publishedAt: new Date(publicationTimestamp * 1000).toISOString(),
+          updatedAt: new Date(publicationTimestamp * 1000).toISOString(),
+          readTime: Math.ceil(content.length / 200), // Estimate reading time
+          category: category || "News",
+          tags: tags,
+          verificationScore: status === "verified" ? 100 : 0,
+          voteCount: upvotes + downvotes,
+          upvotes,
+          downvotes,
+          status:
+            status === "verified"
+              ? "verified"
+              : status === "rejected"
+              ? "under_review"
+              : "published",
+          premium: price > 0,
+          price: price / 100,
+          chapters: [], // No chapters for now
+          stakingAmount: 0, // Default staking amount
+          ipfsHash: contentHash,
+          transactionHash: articleId,
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error fetching article from blockchain:", error);
+      return null;
+    }
+  }
+
   async publishArticle(
     title: string,
     contentHash: string,
     price: number = 0
   ): Promise<string> {
     if (!this.wallet) {
-      throw new Error("Wallet not connected to VeritasChain service. Please ensure wallet is properly connected.");
+      throw new Error(
+        "Wallet not connected to VeritasChain service. Please ensure wallet is properly connected."
+      );
     }
 
     if (!CONTRACTS.ARTICLE_REGISTRY) {
@@ -338,9 +575,9 @@ export class VeritasChainService {
       try {
         const balance = await account.balance(true); // true for final balance
         const balanceInMas = parseFloat(balance.toString()) / 1e9; // Convert to MAS
-        
+
         console.log(`Wallet balance: ${balanceInMas} MAS`);
-        
+
         // Minimum required: 0.15 MAS for gas + storage costs (increased based on error)
         const minRequired = 0.15;
         if (balanceInMas < minRequired) {
@@ -350,7 +587,9 @@ export class VeritasChainService {
         }
       } catch (balanceError) {
         console.error("Error checking balance:", balanceError);
-        throw new Error("Unable to check wallet balance. Please ensure wallet is properly connected.");
+        throw new Error(
+          "Unable to check wallet balance. Please ensure wallet is properly connected."
+        );
       }
 
       // Make blockchain call with sufficient coins for storage
@@ -376,11 +615,14 @@ export class VeritasChainService {
       return articleId;
     } catch (error) {
       console.error("Error publishing article to blockchain:", error);
-      
+
       // Provide specific error messages based on the error type
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       if (errorMessage.includes("insufficient balance")) {
-        throw new Error("Insufficient wallet balance. Please add MAS tokens to your wallet.");
+        throw new Error(
+          "Insufficient wallet balance. Please add MAS tokens to your wallet."
+        );
       } else if (errorMessage.includes("Insufficient balance")) {
         throw error; // Re-throw our custom balance error
       } else {
@@ -412,6 +654,33 @@ export class VeritasChainService {
     } catch (error) {
       console.error("Error uploading to IPFS:", error);
       throw new Error("Failed to upload content to IPFS");
+    }
+  }
+
+  async uploadImageToIPFS(file: File): Promise<string> {
+    try {
+      console.log("Uploading image to IPFS...", file.name);
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // Real IPFS image upload using Pinata service
+      const response = await fetch("/api/ipfs/upload-image", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to upload image to IPFS");
+      }
+
+      const data = await response.json();
+      console.log("Image uploaded to IPFS:", data.hash);
+      return data.hash;
+    } catch (error) {
+      console.error("Error uploading image to IPFS:", error);
+      throw new Error("Failed to upload image to IPFS");
     }
   }
 
